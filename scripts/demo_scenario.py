@@ -546,7 +546,93 @@ def select_scenarios(selection: str) -> list[str]:
     return [selection]
 
 
-def print_results_table(results: list[ScenarioResult]) -> None:
+def explain_scenario(result: ScenarioResult, trace: dict[str, Any]) -> list[str]:
+    """Generate human-readable explanations for each dimension score."""
+    lines: list[str] = []
+    messages = trace.get("messages", [])
+    tool_calls = trace.get("tool_calls", [])
+    errors = trace.get("errors", [])
+    response_times = trace.get("response_times", [])
+
+    # Consistency
+    consistency_parts: list[str] = []
+    if response_times:
+        rt_min, rt_max = min(response_times), max(response_times)
+        if rt_max - rt_min > 1.0:
+            consistency_parts.append(
+                f"response times varied from {rt_min:.1f}s to {rt_max:.1f}s"
+            )
+        else:
+            consistency_parts.append(f"response times were stable (avg {sum(response_times)/len(response_times):.2f}s)")
+    inconsistency_errors = [e for e in errors if e.get("type") in {"inconsistent_response", "hallucination"}]
+    if inconsistency_errors:
+        consistency_parts.append("the agent contradicted itself or gave inconsistent answers")
+    if not consistency_parts:
+        consistency_parts.append("no issues detected")
+    lines.append(f"  Consistency: {result.consistency:.1f}")
+    lines.append(f"    {'; '.join(consistency_parts).capitalize()}.")
+
+    # Error Recovery
+    recovery_parts: list[str] = []
+    if not errors:
+        recovery_parts.append("no errors or timeouts occurred")
+    else:
+        recovered = sum(1 for e in errors if e.get("recovered"))
+        unrecovered = len(errors) - recovered
+        if recovered:
+            recovery_parts.append(f"{recovered} error(s) were recovered from")
+        if unrecovered:
+            recovery_parts.append(f"{unrecovered} error(s) went unrecovered")
+            unrecovered_types = [e.get("type", "error") for e in errors if not e.get("recovered")]
+            if unrecovered_types:
+                recovery_parts.append(f"({', '.join(unrecovered_types)})")
+    lines.append(f"  Error Recovery: {result.error_recovery:.1f}")
+    lines.append(f"    {'; '.join(recovery_parts).capitalize()}.")
+
+    # Tool Accuracy
+    tool_parts: list[str] = []
+    if tool_calls:
+        successes = sum(1 for c in tool_calls if c.get("success"))
+        used = sum(1 for c in tool_calls if c.get("used_in_final_answer"))
+        relevant = sum(1 for c in tool_calls if c.get("matched_user_request"))
+        tool_parts.append(f"{successes}/{len(tool_calls)} tool calls succeeded")
+        if used < len(tool_calls):
+            tool_parts.append(f"only {used}/{len(tool_calls)} results were used in the final answer")
+        else:
+            tool_parts.append("all results were incorporated into the answer")
+        irrelevant = len(tool_calls) - relevant
+        if irrelevant:
+            tool_parts.append(f"{irrelevant} tool call(s) were irrelevant to the user's request")
+    else:
+        tool_parts.append("no tools were used")
+    lines.append(f"  Tool Accuracy: {result.tool_accuracy:.1f}")
+    lines.append(f"    {'; '.join(tool_parts).capitalize()}.")
+
+    # Grounding
+    grounding_parts: list[str] = []
+    hallucination_errors = [e for e in errors if e.get("type") in {"hallucination", "ignored_grounding"}]
+    if hallucination_errors:
+        grounding_parts.append("the agent made confident claims that contradicted or ignored tool output")
+    ignored_relevant = sum(
+        1 for c in tool_calls if c.get("matched_user_request") and not c.get("used_in_final_answer")
+    )
+    if ignored_relevant:
+        grounding_parts.append(f"{ignored_relevant} relevant tool result(s) were completely ignored")
+    if not hallucination_errors and not ignored_relevant:
+        grounding_parts.append("agent claims were backed by tool data")
+    assistant_msgs = [m for m in messages if m.get("role") == "assistant"]
+    if assistant_msgs:
+        contents = " ".join(str(m.get("content", "")) for m in assistant_msgs)
+        confident_words = [w for w in ("definitely", "exactly", "certainly", "absolutely") if w in contents.lower()]
+        if confident_words and (hallucination_errors or ignored_relevant):
+            grounding_parts.append(f"used overly confident language ('{confident_words[0]}') while ignoring data")
+    lines.append(f"  Grounding: {result.grounding:.1f}")
+    lines.append(f"    {'; '.join(grounding_parts).capitalize()}.")
+
+    return lines
+
+
+def print_results_table(results: list[ScenarioResult], traces: list[dict[str, Any]]) -> None:
     headers = ("Scenario", "Composite", "Consistency", "Recovery", "Tool", "Grounding", "Source")
     rows = [
         (
@@ -576,10 +662,14 @@ def print_results_table(results: list[ScenarioResult]) -> None:
         print(format_row(row))
 
     print()
-    for result in results:
-        print(f"{result.scenario_code} {result.scenario_name}:")
-        for highlight in result.highlights:
-            print(f"  - {highlight}")
+    for result, trace in zip(results, traces):
+        print(f"\n{result.scenario_code} {result.scenario_name} — Composite: {result.composite:.1f}")
+        for line in explain_scenario(result, trace):
+            print(line)
+        if result.highlights:
+            print("  Highlights:")
+            for highlight in result.highlights:
+                print(f"    • {highlight}")
 
 
 def main() -> int:
@@ -587,14 +677,16 @@ def main() -> int:
     ensure_output_dirs()
 
     results: list[ScenarioResult] = []
+    traces: list[dict[str, Any]] = []
     for code in select_scenarios(args.scenario):
         trace = SCENARIO_BUILDERS[code]()
         trace_path = write_trace(trace)
         result = score_trace(trace_path, trace)
         upsert_score(result)
         results.append(result)
+        traces.append(trace)
 
-    print_results_table(results)
+    print_results_table(results, traces)
     print(f"\nSynthetic traces written to {TRACE_DIR}")
     print(f"Scores database updated at {DB_PATH}")
     return 0

@@ -77,6 +77,26 @@
       color: var(--text);
     }
 
+    .help-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--card-border);
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .help-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+    }
+
     .controls {
       display: flex;
       gap: 8px;
@@ -193,7 +213,10 @@
       margin-bottom: 20px;
     }
     .score-big {
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
       margin-bottom: 28px;
     }
     .score-big .label {
@@ -201,17 +224,19 @@
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.1em;
+      line-height: 1.2;
     }
     .score-big .value {
       font-size: 4rem;
       font-weight: 800;
-      line-height: 1;
-      margin: 8px 0;
+      line-height: 1.15;
       transition: color 0.5s;
     }
     .score-big .subtitle {
       font-size: 0.7rem;
       color: var(--muted);
+      line-height: 1.2;
+      min-height: 1.2em;
     }
 
     .dim-row {
@@ -293,11 +318,13 @@
   <div class="timeline-panel">
     <div class="timeline-header">
       <h1>🔍 Trace Replay</h1>
+      <div class="status-bar" id="reload-status" style="margin-left:16px;color:var(--muted);font-size:0.8rem;align-self:center;"></div>
       <div class="scenario-selector">
         <button class="scenario-btn active" data-scenario="good">Good</button>
         <button class="scenario-btn" data-scenario="flaky">Flaky</button>
         <button class="scenario-btn" data-scenario="hallucinating">Hallucinating</button>
         <button class="scenario-btn" data-scenario="mixed">Mixed</button>
+        <button class="help-btn" title="How to investigate low scores" onclick="window.open('file:///Users/anthonyaguilar/.hermes/skills/agent-reliability/INVESTIGATE.md','_blank')">❓</button>
       </div>
     </div>
 
@@ -427,6 +454,7 @@ let currentIndex = -1;
 let playing = false;
 let playInterval = null;
 
+  const statusEl = document.getElementById('reload-status');
 // ─── Helpers ───
 function scoreColor(v) {
   if (v >= 80) return '#10b981';
@@ -682,6 +710,123 @@ document.querySelectorAll('.scenario-btn').forEach(btn => {
 // ─── Init ───
 renderTimeline();
 document.getElementById('step-counter').textContent = `0 / ${SCENARIOS[currentScenario].events.length}`;
+
+
+// ─── Real Session Loader ──────────────────────────────────────────────────────
+// If URL has ?session=<session_id>, load that session from the trace files
+(async function loadRealSession() {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session');
+  if (!sessionId) return;
+
+  document.title = `Trace Replay — ${sessionId}`;
+  statusEl.textContent = `Loading session ${sessionId}...`;
+
+  try {
+    // 1. Fetch score metadata
+    const storeRes = await fetch('/data/sessions-store.json');
+    const store = await storeRes.json();
+    const meta = store[sessionId];
+    if (!meta) throw new Error('Session not found in scores DB');
+
+    // 2. Fetch trace index
+    const idxRes = await fetch('/data/traces-index.json');
+    const idx = await idxRes.json();
+    const traceFile = idx[sessionId];
+    if (!traceFile) throw new Error('Session not found in any trace file');
+
+    // 3. Fetch the trace file
+    const traceRes = await fetch(`/data/traces/${traceFile}`);
+    const traceData = await traceRes.json();
+    const session = traceData.sessions.find(s => s.session_id === sessionId);
+    if (!session) throw new Error('Session data missing from trace');
+
+    // 4. Build events array from transcript
+    const events = [];
+    const msgs = session.transcript_messages || [];
+    const tools = session.tool_calls || [];
+    const results = session.tool_results || [];
+
+    // Simple tool lookup by index (tool messages typically follow calls)
+    let toolIdx = 0, resultIdx = 0;
+
+    for (const msg of msgs) {
+      const role = msg.role;
+      const content = msg.content || '';
+      const ts = '00:00'; // We don't have per-turn timestamps in trace
+
+      if (role === 'user') {
+        events.push({ type: 'user', content, ts });
+      } else if (role === 'assistant') {
+        events.push({ type: 'assistant', content, ts });
+      } else if (role === 'tool') {
+        // Find corresponding tool call
+        const tool = tools[toolIdx] || {};
+        const result = results[resultIdx] || {};
+        toolIdx++; resultIdx++;
+
+        const success = result && !(result.error || result.exception);
+        events.push({
+          type: 'tool',
+          tool: tool.tool_name || 'unknown',
+          success,
+          latency: result?.latency || 0,
+          notes: result?.output?.slice(0, 80) || '',
+          ts
+        });
+      }
+    }
+
+    // 5. Create a synthetic "score" event at the end (final score)
+    events.push({
+      type: 'score',
+      cr: meta.dimensions.consistency,
+      er: meta.dimensions.error_recovery,
+      ta: meta.dimensions.tool_accuracy,
+      g: meta.dimensions.grounding,
+      c: meta.composite,
+      ts: 'Final'
+    });
+
+    // 6. Inject into SCENARIOS and switch to it
+    SCENARIOS.real = {
+      name: `Session ${sessionId.slice(0,12)}...`,
+      events: events
+    };
+    currentScenario = 'real';
+    reset();
+    statusEl.textContent = `Session ${sessionId} — Loaded ${events.length} events`;
+    document.querySelector('.scenario-selector').style.display = 'none'; // hide scenario buttons
+
+    // Populate live score panel with final metrics
+    setTimeout(() => {
+      document.getElementById('score-c').textContent = meta.dimensions.consistency.toFixed(1);
+      document.getElementById('score-r').textContent = meta.dimensions.error_recovery.toFixed(1);
+      document.getElementById('score-t').textContent = meta.dimensions.tool_accuracy.toFixed(1);
+      document.getElementById('score-g').textContent = meta.dimensions.grounding.toFixed(1);
+      document.getElementById('score-composite').textContent = meta.composite.toFixed(1);
+      // Color them
+      ['c','r','t','g'].forEach(dim => {
+        const el = document.getElementById('score-'+dim);
+        const val = meta.dimensions[dim];
+        el.style.color = scoreColor(val);
+      });
+    }, 100);
+
+    // Insert highlights into event log if desired
+    if (meta.highlights && meta.highlights.length) {
+      const highlightsEl = document.createElement('div');
+      highlightsEl.innerHTML = `<strong style="color:var(--warn)">⚠️ Key Issues:</strong><ul>` +
+        meta.highlights.map(h => `<li>${h}</li>`).join('') + `</ul>`;
+      document.querySelector('.timeline-panel').insertBefore(highlightsEl, document.querySelector('.timeline-header'));
+    }
+
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    console.error(err);
+  }
+})();
+
 </script>
 </body>
 </html>

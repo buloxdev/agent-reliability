@@ -61,6 +61,42 @@
       50% { opacity: 0.4; }
     }
     .topbar .meta { color: var(--muted); font-size: 0.8rem; }
+    .topbar a.badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .topbar a.badge:hover {
+      background: rgba(59, 130, 246, 0.2);
+      transform: translateY(-1px);
+    }
+    .topbar .help-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 1rem;
+      transition: background 0.2s, transform 0.2s, color 0.2s;
+      margin-left: 12px;
+    }
+    .topbar .help-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      transform: scale(1.1);
+    }
 
     .page { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
 
@@ -236,6 +272,19 @@
       transform: translateY(-3px);
       box-shadow: 0 12px 32px rgba(0,0,0,0.4);
     }
+    .session-card::after {
+      content: '↗';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 0.75rem;
+      opacity: 0;
+      transition: opacity 0.2s;
+      color: var(--accent);
+    }
+    .session-card:hover::after {
+      opacity: 1;
+    }
     .session-card .sc-name {
       font-size: 0.75rem;
       font-weight: 600;
@@ -307,6 +356,11 @@
       letter-spacing: 0.1em;
     }
     .sparkline-container { width: 100%; overflow: hidden; }
+    #historyCanvas {
+      width: 100%;
+      height: 220px;
+      display: block;
+    }
 
     /* Color helpers */
     .c-good { color: var(--success); }
@@ -318,13 +372,28 @@
       .dimensions-grid { grid-template-columns: 1fr; }
       .fleet-grid { grid-template-columns: 1fr; }
     }
-  </style>
+  
+    /* Histogram */
+    .histogram-container { display: flex; flex-direction: column; gap: 6px; padding: 16px 0; }
+    .hist-bar-container { display: flex; align-items: center; gap: 12px; }
+    .hist-label { width: 50px; font-size: 0.75rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+    .hist-bar-wrap { flex: 1; position: relative; height: 22px; background: rgba(255,255,255,0.04); border-radius: 6px; overflow: hidden; }
+    .hist-bar { height: 100%; border-radius: 6px 0 0 6px; transition: width 0.8s cubic-bezier(0.22,1,0.36,1); }
+    .hist-count { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75rem; color: var(--text); font-weight: 600; text-shadow: 0 0 4px rgba(0,0,0,0.5); }
+    .histogram-legend { display: flex; gap: 20px; font-size: 0.75rem; color: var(--muted); margin-top: 8px; justify-content: center; flex-wrap: wrap; }
+</style>
 </head>
 <body>
 
 <header class="topbar">
   <h1><span class="status-dot"></span> AGENT RELIABILITY — MISSION CONTROL</h1>
-  <span class="meta">253 sessions · last scored Apr 17 2026</span>
+  <a href="reports/latest-report.html" class="badge" target="_blank" title="Open latest executive summary">
+    <span style="font-size:1.1em">📊</span> Reliability Report
+  </a>
+  <a href="file:///Users/anthonyaguilar/.hermes/skills/agent-reliability/INVESTIGATE.md" class="help-btn" target="_blank" title="How to investigate low scores">
+    ❓
+  </a>
+  <span class="meta">253 sessions · last updated Apr 22 2026</span>
 </header>
 
 <main class="page">
@@ -347,7 +416,7 @@
         </defs>
       </svg>
       <div class="gauge-score" id="hero-score">—</div>
-      <div class="gauge-subtitle">across 253 scored sessions</div>
+      <div class="gauge-subtitle">Top 12 sessions</div>
     </div>
 
     <div class="dimensions-grid" id="dims-grid">
@@ -372,12 +441,83 @@
   </section>
 
   <!-- Score History Sparkline -->
+  <!-- Score Distribution Histogram -->
   <section class="history-card">
-    <h2>Score Distribution</h2>
-    <div class="sparkline-container">
-      <canvas id="historyCanvas" width="1300" height="200"></canvas>
+    <h2>Score Distribution — Fleet (289 sessions)</h2>
+    <div class="histogram-container">
+      <div class="hist-bar-container">
+        <div class="hist-label">30-34</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:0.7%; background:var(--danger)"></div>
+          <div class="hist-count">1</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">40-44</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:1.3%; background:var(--danger)"></div>
+          <div class="hist-count">2</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">50-54</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:2.0%; background:var(--danger)"></div>
+          <div class="hist-count">3</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">55-59</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:36.2%; background:var(--danger)"></div>
+          <div class="hist-count">54</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">60-64</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:100.0%; background:#f59e0b"></div>
+          <div class="hist-count">149</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">65-69</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:9.4%; background:#f59e0b"></div>
+          <div class="hist-count">14</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">70-74</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:34.2%; background:var(--warn)"></div>
+          <div class="hist-count">51</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">75-79</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:7.4%; background:var(--warn)"></div>
+          <div class="hist-count">11</div>
+        </div>
+      </div>
+      <div class="hist-bar-container">
+        <div class="hist-label">80-84</div>
+        <div class="hist-bar-wrap">
+          <div class="hist-bar" style="width:2.7%; background:var(--success)"></div>
+          <div class="hist-count">4</div>
+        </div>
+      </div>
+    </div>
+    <div class="histogram-legend">
+      <span style="color:var(--success)">● 80-100 (Excellent)</span>
+      <span style="color:var(--warn)">● 70-79 (Good)</span>
+      <span style="color:#f59e0b">● 60-69 (Needs Work)</span>
+      <span style="color:var(--danger)">● &lt;60 (Critical)</span>
     </div>
   </section>
+</main>
+
 </main>
 
 <script>
@@ -390,19 +530,22 @@ const SCENARIOS = [
 ];
 
 const TOP_SESSIONS = [
-  { name: 'Good Agent',           label: '✅ Good Agent',          c: 100,   cr: 100, er: 100, ta: 100,  g: 100 },
-  { name: 'Mixed Agent',          label: '⚠️ Mixed Agent',         c: 91.7,  cr: 86,  er: 100, ta: 83.3, g: 98 },
-  { name: 'Session Apr 9',        label: 'Session Apr 9, 12:49',   c: 81.25, cr: 80,  er: 70,  ta: 75,   g: 100 },
-  { name: 'Session Apr 10',       label: 'Session Apr 10, 12:10',  c: 78.5,  cr: 80,  er: 70,  ta: 64,   g: 100 },
-  { name: 'Session Apr 9',        label: 'Session Apr 9, 17:24',   c: 77.64, cr: 80,  er: 70,  ta: 60.57,g: 100 },
-  { name: 'Session Apr 9',        label: 'Session Apr 9, 17:05',   c: 77.38, cr: 80,  er: 70,  ta: 59.5, g: 100 },
-  { name: 'Session Apr 9',        label: 'Session Apr 9, 12:35',   c: 76.25, cr: 80,  er: 70,  ta: 55,   g: 100 },
-  { name: 'Session Apr 16',       label: 'Session Apr 16, 20:11',  c: 75.62, cr: 80,  er: 70,  ta: 80,   g: 72.5 },
-  { name: 'Session Apr 8',        label: 'Session Apr 8, 08:09',   c: 75.5,  cr: 80,  er: 70,  ta: 52,   g: 100 },
-  { name: 'Session Apr 9',        label: 'Session Apr 9, 18:23',   c: 75.2,  cr: 80,  er: 70,  ta: 50.82,g: 100 },
-  { name: 'Flaky Agent',          label: '🔴 Flaky Agent',         c: 57.7,  cr: 29,  er: 30,  ta: 73.3, g: 87 },
-  { name: 'Hallucinating Agent',  label: '💀 Hallucinating Agent', c: 25.6,  cr: 49,  er: 0,   ta: 45,   g: 7 },
+  { "name": "demo-good-agent", "label": "✔ Good Agent", "c": 100.0, "cr": 100.0, "er": 100.0, "ta": 100.0, "g": 100.0 },
+  { "name": "demo-mixed-agent", "label": "▲ Mixed Agent", "c": 91.7, "cr": 86.0, "er": 100.0, "ta": 83.3, "g": 98.0 },
+  { "name": "20260409_124938_8cf264", "label": "Session 04-09 • 20260409_1249...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 75.0, "g": 100.0 },
+  { "name": "20260410_120502_0fb82a", "label": "Session 04-10 • 20260410_1205...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 75.0, "g": 100.0 },
+  { "name": "20260415_080433_d8decb77", "label": "Session 04-15 • 20260415_0804...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 75.0, "g": 100.0 },
+  { "name": "20260416_070851_66ddceb8", "label": "Session 04-16 • 20260416_0708...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 75.0, "g": 100.0 },
+  { "name": "20260410_121046_497303", "label": "Session 04-10 • 20260410_1210...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 64.0, "g": 100.0 },
+  { "name": "20260409_172444_76b8b4", "label": "Session 04-09 • 20260409_1724...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 60.6, "g": 100.0 },
+  { "name": "20260409_174148_9ca26b", "label": "Session 04-09 • 20260409_1741...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 60.6, "g": 100.0 },
+  { "name": "20260409_170523_e32947", "label": "Session 04-09 • 20260409_1705...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 59.5, "g": 100.0 },
+  { "name": "20260410_120625_2369ed", "label": "Session 04-10 • 20260410_1206...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 59.5, "g": 100.0 },
+  { "name": "20260409_123550_81cfd0", "label": "Session 04-09 • 20260409_1235...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 55.0, "g": 100.0 },
+  { "name": "20260416_201129_ef59c5", "label": "Session 04-16 • 20260416_2011...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 80.0, "g": 72.5 },
+  { "name": "20260408_080918_7baed3", "label": "Session 04-08 • 20260408_0809...", "c": 80.0, "cr": 80.0, "er": 70.0, "ta": 52.0, "g": 100.0 },
 ];
+
 
 // Score distribution (binned from all 253 sessions)
 const DISTRIBUTION = [
@@ -544,7 +687,7 @@ function renderFleet() {
   const grid = document.getElementById('fleet-grid');
   grid.innerHTML = TOP_SESSIONS.map(s => {
     const color = scoreColor(s.c);
-    return `<div class="session-card" style="border-left: 4px solid ${color}">
+    return `<div class="session-card" data-session-id="${s.name}" onclick="window.open('trace-replay.html?session=${s.name}', '_blank')" style="border-left: 4px solid ${color}">
       <div class="sc-name">${s.label}</div>
       <div class="sc-score" style="color:${color}">${s.c.toFixed(1)}</div>
       <div class="sc-dims">
@@ -560,10 +703,20 @@ function renderFleet() {
 // ─── Distribution Chart ───
 function renderDistribution() {
   const canvas = document.getElementById('historyCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.max(Math.floor(rect.width * dpr), 600);
+  const H = Math.max(Math.floor(rect.height * dpr), 200);
+  canvas.width = W;
+  canvas.height = H;
+
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  const pad = { t: 20, r: 20, b: 40, l: 50 };
-  const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+  ctx.scale(dpr, dpr);
+  const CssW = rect.width;
+  const CssH = rect.height;
+  const pad = { t: 24, r: 20, b: 48, l: 50 };
+  const cw = CssW - pad.l - pad.r;
+  const ch = CssH - pad.t - pad.b;
 
   // Bin data
   const bins = {};
@@ -576,7 +729,7 @@ function renderDistribution() {
 
   // Background
   ctx.fillStyle = 'rgba(10, 14, 26, 0.3)';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, CssW, CssH);
 
   // Grid lines
   ctx.strokeStyle = 'rgba(255,255,255,0.04)';
@@ -585,14 +738,17 @@ function renderDistribution() {
     const y = pad.t + (ch / 4) * i;
     ctx.beginPath();
     ctx.moveTo(pad.l, y);
-    ctx.lineTo(W - pad.r, y);
+    ctx.lineTo(CssW - pad.r, y);
     ctx.stroke();
   }
 
   // Bars
-  const barW = cw / binKeys.length - 2;
+  const barSlot = cw / binKeys.length;
+  const barW = Math.max(barSlot - 3, 2);
+  const labelStep = barSlot < 22 ? 6 : (barSlot < 34 ? 3 : 2);
+
   binKeys.forEach((key, i) => {
-    const x = pad.l + (cw / binKeys.length) * i + 1;
+    const x = pad.l + barSlot * i + (barSlot - barW) / 2;
     const h = (bins[key] / maxCount) * ch;
     const y = pad.t + ch - h;
     const color = scoreColor(key + 2.5);
@@ -605,28 +761,30 @@ function renderDistribution() {
     ctx.fillStyle = color;
     ctx.fillRect(x, y, barW, 2);
 
-    // Label
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '9px monospace';
-    ctx.textAlign = 'center';
-    if (i % 3 === 0) ctx.fillText(key.toString(), x + barW / 2, H - pad.b + 16);
+    // Label (adaptive frequency)
+    if (i % labelStep === 0) {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(key.toString(), x + barW / 2, CssH - 14);
+    }
   });
 
   // Y-axis labels
   ctx.fillStyle = '#6b7280';
-  ctx.font = '10px monospace';
+  ctx.font = '11px monospace';
   ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const val = Math.round(maxCount * (4 - i) / 4);
     const y = pad.t + (ch / 4) * i;
-    ctx.fillText(val.toString(), pad.l - 8, y + 4);
+    ctx.fillText(val.toString(), pad.l - 10, y + 4);
   }
 
-  // Title labels
+  // X-axis caption
   ctx.fillStyle = '#6b7280';
-  ctx.font = '10px monospace';
+  ctx.font = '11px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('Score Range →', W / 2, H - 4);
+  ctx.fillText('Score Range →', CssW / 2, CssH - 2);
 }
 
 // ─── Init ───
@@ -634,7 +792,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Compute average composite
   const avgComposite = TOP_SESSIONS.reduce((a, s) => a + s.c, 0) / TOP_SESSIONS.length;
 
-  animateGauge(63.4);
+  animateGauge(81.7);
   renderDimensions();
   renderRadars();
   renderFleet();

@@ -1,6 +1,16 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Data stores and generated artifacts
 data/scores.db
+data/traces/
+prototypes/data/
+prototypes/reports/
+
+# Video / media renders
+manim-video/
+*.mp4
+
+# Generated HTML dashboards (build artifacts)
 data/dashboard.html
-data/traces/2026*.json

@@ -393,7 +393,7 @@
   <a href="file:///Users/anthonyaguilar/.hermes/skills/agent-reliability/INVESTIGATE.md" class="help-btn" target="_blank" title="How to investigate low scores">
     ❓
   </a>
-  <span class="meta">253 sessions · last updated Apr 22 2026</span>
+  <span class="meta" id="last-updated">Loading…</span>
 </header>
 
 <main class="page">
@@ -735,13 +735,20 @@ function renderAll() {
   if (fleetHeading) fleetHeading.textContent = 'Session Fleet (Top ' + sessions.length + ')';
   const distHeading = document.getElementById('dist-heading');
   if (distHeading) distHeading.textContent = 'Score Distribution — Fleet (' + distribution.length + ' sessions)';
+
+  // Update last-updated timestamp
+  const updatedEl = document.getElementById('last-updated');
+  if (updatedEl) {
+    const ts = REPORT && REPORT.timestamp ? new Date(REPORT.timestamp) : new Date();
+    updatedEl.textContent = distribution.length + ' sessions · last updated ' + ts.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' ' + ts.toLocaleDateString([], {month:'short', day:'numeric'});
+  }
 }
 
 // ─── Init ───
 window.addEventListener('DOMContentLoaded', () => {
   loadReport();
-  // Refresh every 30s if report file updates
-  setInterval(loadReport, 30000);
+  // Refresh every 5 min if report file updates (monitors usually run hourly)
+  setInterval(loadReport, 300000);
 });
 </script>
 </body>

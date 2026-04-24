@@ -11,6 +11,8 @@ prototypes/reports/
 # Video / media renders
 manim-video/
 *.mp4
+!remotion-video/out/video.mp4
+remotion-video/node_modules/
 
 # Generated HTML dashboards (build artifacts)
 data/dashboard.html

@@ -14,6 +14,58 @@ metadata:
 
 An observability layer for Hermes agents. Parses gateway logs and session transcripts to compute reliability scores, detect anomalies, and generate human-readable reports.
 
+## Live Monitor (Real-Time Dashboard)
+
+`scripts/monitor.py` turns the static dashboard into a live monitoring system by scanning your actual Hermes session storage, scoring them, and emitting a JSON report that `cockpit-dashboard.html` consumes.
+
+### What it does
+
+1. Scans `~/.hermes/sessions/*.jsonl` and `~/.hermes/state.db` for recent sessions
+2. Reuses the existing `trace_parser.py` → `scorer.py` pipeline
+3. Writes `data/monitor-report.json` with fleet stats, per-session scores, and alerts
+4. Prints terminal alerts for threshold breaches (composite < 50 = critical, < 70 = warning)
+
+### Running the monitor
+
+```bash
+cd ~/.hermes/skills/agent-reliability
+
+# One-shot: score last 24h, top 15 sessions
+python3 scripts/monitor.py --lookback-hours 24 --top-n 15
+
+# Continuous watch mode (re-scans every 60 seconds)
+python3 scripts/monitor.py --watch 60
+
+# Custom thresholds
+python3 scripts/monitor.py --critical 45 --warning 65
+```
+
+### Serving the live dashboard
+
+The dashboard fetches `../data/monitor-report.json` dynamically (relative to the `prototypes/` directory). Because of CORS, you must serve it over HTTP, not `file://`:
+
+```bash
+cd ~/.hermes/skills/agent-reliability/prototypes
+python3 -m http.server 8767
+
+# Open in browser
+open http://localhost:8767/cockpit-dashboard.html
+```
+
+**Path gotcha:** If you open the HTML directly from the project root (e.g. `file:///.../agent-reliability/prototypes/cockpit-dashboard.html`), the relative `../data/monitor-report.json` path will resolve incorrectly. Always serve from `prototypes/` so the fetch hits `prototypes/../data/monitor-report.json` → `data/monitor-report.json`.
+
+**Cache gotcha:** Browsers aggressively cache the dashboard during development. Hard refresh (`Ctrl+Shift+R`) or append `?nocache=1` to verify changes.
+
+### Integrating with cron
+
+```bash
+hermes cron create \
+  --name "Agent Reliability Live Monitor" \
+  --schedule "every 1h" \
+  --prompt "Run ~/.hermes/skills/agent-reliability/scripts/monitor.py --lookback-hours 24 --top-n 15 and report any alerts." \
+  --skill agent-reliability
+```
+
 ## Quick Start (Standalone — No Hermes Required)
 
 The fastest way to understand the tool is to run the demo scenarios. They generate synthetic agent sessions, score them, and print human-readable explanations for every dimension.
@@ -53,6 +105,7 @@ python3 ~/.hermes/skills/agent-reliability/scripts/dashboard.py
 | `scripts/trace_parser.py` | Parses `gateway.log` + session transcripts → structured JSON traces |
 | `scripts/scorer.py` | Computes C/R/T/G scores from traces → SQLite `data/scores.db` |
 | `scripts/dashboard.py` | Generates static `data/dashboard.html` from current scores |
+| `scripts/monitor.py` | **Live monitor:** scan real Hermes sessions, score them, emit `data/monitor-report.json`, print terminal alerts |
 | `scripts/run_pipeline.py` | **One-command full pipeline:** parse → score → generate visuals |
 | `scripts/image_generator.py` | Generate visual scorecard images via AI (FAL) — template-based |
 | `scripts/stamp_scorecards.py` | Overlay live stats onto pre-generated template images using ffmpeg |
@@ -62,7 +115,8 @@ python3 ~/.hermes/skills/agent-reliability/scripts/dashboard.py
 | `prototypes/reports/templates/` | High-quality AI-generated template images (base layer for stamping) |
 | `data/scores.db` | SQLite database — all scored sessions |
 | `data/traces/*.json` | Raw parsed session traces |
-| `manim-video/` | Complete 32s demo video produced with Manim (all 5 scenes rendered) |
+| `manim-video/` | Animated demo video produced with Manim (technical/mathematical style) |
+| `remotion-video/` | **Preferred demo video.** React-based programmatic video (5 scenes, ~30s) |
 
 ## Scoring Dimensions
 
@@ -76,6 +130,60 @@ python3 ~/.hermes/skills/agent-reliability/scripts/dashboard.py
 - Traces: `~/.hermes/skills/agent-reliability/data/traces/`
 - Scores: `~/.hermes/skills/agent-reliability/data/scores.db` (SQLite)
 - Dashboard: `~/.hermes/skills/agent-reliability/data/dashboard.html`
+
+## Demo Video
+
+Two programmatic video pipelines exist. The **Remotion video is the preferred hackathon demo output.**
+
+### Which video to use
+
+| Pipeline | Location | Style | Status |
+|----------|----------|-------|--------|
+| **Remotion** | `remotion-video/out/video.mp4` | React/CSS animations, dark theme, score panels | **Use this one.** Confirmed good by user (Apr 24 2026). |
+| Manim | `manim-video/media/videos/script/1080p60/FullDemo.mp4` | Mathematical/technical animations, radar charts | Exists but looks more like a lecture. Fallback only. |
+
+**Always verify `remotion-video/out/video.mp4` exists before starting new video work.** Both pipelines take time to render; do not recreate unnecessarily.
+
+### Remotion video structure (5 scenes, ~30s, 1080p30)
+
+1. **Hook** — "Can you trust your AI agent?" (4s)
+2. **Bad Agent** — Hallucinating agent timeline + live score collapse (10s)
+3. **Good Agent** — Clean tool use + perfect scores (6s)
+4. **Fleet Overview** — Radar chart, score histogram, fleet average gauge (6s)
+5. **End Card** — "Agent Reliability Scores" + tagline (4s)
+
+Source scenes: `remotion-video/src/Scene{1-5}*.tsx`
+
+### Sound effects
+
+Sound effect assets exist in `assets/` (click, pop, chime, fail) but are **not yet mixed into the video.**
+
+To add them and re-render:
+
+```bash
+cd ~/.hermes/skills/agent-reliability/remotion-video
+
+# Add audio tracks to the Remotion composition (see src/Video.tsx)
+# Then re-render:
+npx remotion render src/index.tsx AgentReliabilityVideo out/video.mp4
+```
+
+Without sound effects the video is silent. For hackathon submission, sound design is recommended (soft clicks/pops only, no voiceover).
+
+### Re-rendering from scratch
+
+```bash
+cd ~/.hermes/skills/agent-reliability/remotion-video
+npm install
+npx remotion render src/index.tsx AgentReliabilityVideo out/video.mp4
+```
+
+Or for Manim (fallback):
+```bash
+cd ~/.hermes/skills/agent-reliability/manim-video
+manim -pqh script.py FullDemo
+# Output: media/videos/script/1080p60/FullDemo.mp4
+```
 
 ## Hackathon Prototypes
 
@@ -359,7 +467,8 @@ WHERE t.tool LIKE '%your_tool_name%';
 
 - **Gateway log path**: By default `trace_parser.py` looks at `~/.hermes/logs/gateway.log`. If your log is elsewhere, pass `--log-path /path/to/log`.
 - **Duplicate sessions**: The scorer deduplicates by `session_id`. If you re-run on the same log file, only new sessions are inserted.
-- **Prototypes are static**: The HTML dashboards show a fixed snapshot at generation time. They are not auto-refreshing from `scores.db` (future enhancement).
+- **Prototypes are live when served:** `cockpit-dashboard.html` now fetches `../data/monitor-report.json` dynamically. It is NOT static — but it requires an HTTP server (CORS blocks `file://` access). Use `python3 -m http.server` in the `prototypes/` directory.
+- **Dashboard cache:** Browsers aggressively cache the dashboard HTML/JS during development. Hard refresh (`Ctrl+Shift+R`) or append `?nocache=1` after URL changes.
 - **Time zone**: Session timestamps are stored as ISO 8601 with UTC offset. Dashboard converts to local timezone automatically.
 - **Network degradation**: If `httpx.ReadError` appears in gateway logs (see memory), some tool calls will fail → lower Tool Accuracy scores. Root cause is infrastructure, not the agent itself.
 
